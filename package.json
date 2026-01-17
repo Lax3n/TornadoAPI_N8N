@@ -22,7 +22,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/velys/n8n-nodes-tornado-api.git"
+    "url": "https://github.com/Lax3n/TornadoAPI_N8N.git"
   },
   "main": "index.js",
   "scripts": {

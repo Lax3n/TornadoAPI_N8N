@@ -357,7 +357,7 @@ Use the **IF** node to handle errors:
 ### Build from Source
 
 ```bash
-git clone https://github.com/velys-software/n8n-nodes-tornado-api
+git clone https://github.com/Lax3n/TornadoAPI_N8N
 cd n8n-nodes-tornado-api
 npm install
 npm run build
