@@ -3,7 +3,6 @@ import {
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
-	NodeOperationError,
 } from 'n8n-workflow';
 
 export class TornadoApi implements INodeType {
@@ -77,12 +76,6 @@ export class TornadoApi implements INodeType {
 						value: 'getStatus',
 						description: 'Get the status of a job',
 						action: 'Get job status',
-					},
-					{
-						name: 'Wait for Completion',
-						value: 'waitForCompletion',
-						description: 'Wait for a job to complete',
-						action: 'Wait for job completion',
 					},
 				],
 				default: 'create',
@@ -214,39 +207,11 @@ export class TornadoApi implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['job'],
-						operation: ['getStatus', 'waitForCompletion'],
+						operation: ['getStatus'],
 					},
 				},
 				default: '',
 				description: 'The UUID of the job',
-			},
-
-			// Wait for Completion Options
-			{
-				displayName: 'Timeout (Seconds)',
-				name: 'timeout',
-				type: 'number',
-				displayOptions: {
-					show: {
-						resource: ['job'],
-						operation: ['waitForCompletion'],
-					},
-				},
-				default: 600,
-				description: 'Maximum time to wait for completion',
-			},
-			{
-				displayName: 'Poll Interval (Seconds)',
-				name: 'pollInterval',
-				type: 'number',
-				displayOptions: {
-					show: {
-						resource: ['job'],
-						operation: ['waitForCompletion'],
-					},
-				},
-				default: 5,
-				description: 'Time between status checks',
 			},
 
 			// ==================== BATCH OPERATIONS ====================
@@ -508,49 +473,6 @@ export class TornadoApi implements INodeType {
 								'x-api-key': credentials.apiKey as string,
 							},
 						});
-					}
-
-					if (operation === 'waitForCompletion') {
-						const jobId = this.getNodeParameter('jobId', i) as string;
-						const timeout = this.getNodeParameter('timeout', i) as number;
-						const pollInterval = this.getNodeParameter('pollInterval', i) as number;
-
-						const startTime = Date.now();
-						const timeoutMs = timeout * 1000;
-
-						while (Date.now() - startTime < timeoutMs) {
-							responseData = await this.helpers.httpRequest({
-								method: 'GET',
-								url: `${baseUrl}/jobs/${jobId}`,
-								json: true,
-								headers: {
-									'x-api-key': credentials.apiKey as string,
-								},
-							});
-
-							if (responseData.status === 'Completed') {
-								break;
-							}
-
-							if (responseData.status === 'Failed') {
-								throw new NodeOperationError(
-									this.getNode(),
-									`Job failed: ${responseData.error || 'Unknown error'}`,
-									{ itemIndex: i },
-								);
-							}
-
-							// Wait before next poll
-							await new Promise((resolve) => setTimeout(resolve, pollInterval * 1000));
-						}
-
-						if (responseData.status !== 'Completed' && responseData.status !== 'Failed') {
-							throw new NodeOperationError(
-								this.getNode(),
-								`Timeout waiting for job completion. Last status: ${responseData.status}`,
-								{ itemIndex: i },
-							);
-						}
 					}
 				}
 

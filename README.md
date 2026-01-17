@@ -89,21 +89,6 @@ Check the current status of a job.
 
 ---
 
-### Job → Wait for Completion
-
-Polls until the job is complete or fails. **Best for simple workflows.**
-
-**Input:**
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| Job ID | string | - | The job UUID |
-| Timeout | number | 600 | Max wait time (seconds) |
-| Poll Interval | number | 5 | Time between checks (seconds) |
-
-**Output:** Same as Get Status (when completed)
-
----
-
 ## 📦 S3 Storage - How It Works
 
 ### Default Flow
@@ -156,16 +141,18 @@ Google Drive node:
 
 ## 🔄 Workflow Examples
 
-### Example 1: Simple YouTube Download
+### Example 1: Simple YouTube Download with Polling
+
+Use n8n's **Wait** and **IF** nodes to poll for job completion:
 
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Trigger   │ →  │ Tornado API │ →  │ Tornado API │
-│  (Manual)   │    │ Job:Create  │    │ Job:Wait    │
-└─────────────┘    └─────────────┘    └─────────────┘
-                         │                   │
-                         ▼                   ▼
-                   { job_id: ... }    { s3_url: ... }
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   Trigger   │ →  │ Tornado API │ →  │    Wait     │ →  │ Tornado API │ →  │     IF      │
+│  (Manual)   │    │ Job:Create  │    │  (5 sec)    │    │ Job:Status  │    │ Completed?  │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+                         │                                      ▲                  │
+                         ▼                                      │                  ▼
+                   { job_id: ... }                         Loop back         { s3_url: ... }
 ```
 
 **Node 1 - Tornado API (Create):**
@@ -173,25 +160,33 @@ Google Drive node:
 - Operation: Create
 - URL: `https://youtube.com/watch?v=dQw4w9WgXcQ`
 
-**Node 2 - Tornado API (Wait):**
+**Node 2 - Wait:**
+- Wait Time: 5 seconds
+
+**Node 3 - Tornado API (Get Status):**
 - Resource: Job
-- Operation: Wait for Completion
-- Job ID: `{{ $json.job_id }}`
+- Operation: Get Status
+- Job ID: `{{ $('Tornado API').item.json.job_id }}`
+
+**Node 4 - IF:**
+- Condition: `{{ $json.status }}` equals `Completed`
+- True: Continue to next step
+- False: Loop back to Wait node
 
 ---
 
 ### Example 2: Download + Send to Telegram
 
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  Telegram   │ →  │ Tornado API │ →  │ Tornado API │ →  │  Telegram   │
-│  Trigger    │    │ Job:Create  │    │ Job:Wait    │    │ Send Video  │
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  Telegram   │ →  │ Tornado API │ →  │    Wait     │ →  │ Tornado API │ →  │  Telegram   │
+│  Trigger    │    │ Job:Create  │    │  + Loop     │    │ Job:Status  │    │ Send Video  │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
 **Telegram Trigger:** Receives YouTube URL from user
 **Tornado Create:** URL = `{{ $json.message.text }}`
-**Tornado Wait:** Job ID = `{{ $json.job_id }}`
+**Wait + Loop:** Poll every 5 seconds until status = Completed
 **Telegram Send:** Video URL = `{{ $json.s3_url }}`
 
 ---
@@ -201,12 +196,12 @@ Google Drive node:
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   Trigger   │ →  │ Tornado API │ →  │  Split In   │ →  │ Tornado API │
-│             │    │ Job:Create  │    │   Batches   │    │ Job:Wait    │
+│             │    │ Job:Create  │    │   Batches   │    │ Job:Status  │
 └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-                         │
-                         ▼
-                   { batch_id: ...,
-                     episode_jobs: [...] }
+                         │                                      │
+                         ▼                                      ▼
+                   { batch_id: ...,                    (with Wait + Loop
+                     episode_jobs: [...] }              for each job)
 ```
 
 **Tornado Create:**
@@ -217,8 +212,9 @@ Google Drive node:
 - Input: `{{ $json.episode_jobs }}`
 - Batch Size: 10
 
-**Tornado Wait (for each):**
+**Tornado Get Status (with Wait + Loop):**
 - Job ID: `{{ $json }}`
+- Loop until status = Completed
 
 ---
 
@@ -228,8 +224,8 @@ Use your own S3 bucket (AWS, Cloudflare R2, MinIO):
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Manual    │ →  │ Tornado API │ →  │ Tornado API │ →  │ Tornado API │
-│   Trigger   │    │ Storage:    │    │ Job:Create  │    │ Job:Wait    │
+│   Manual    │ →  │ Tornado API │ →  │ Tornado API │ →  │    Wait     │
+│   Trigger   │    │ Storage:    │    │ Job:Create  │    │  + Loop     │
 │             │    │ Configure   │    │             │    │             │
 └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
                          │                                      │
@@ -253,12 +249,10 @@ Use your own S3 bucket (AWS, Cloudflare R2, MinIO):
 - Operation: Create
 - URL: `https://youtube.com/watch?v=...`
 
-**Node 3 - Tornado API (Wait):**
-- Resource: Job
-- Operation: Wait for Completion
-- Job ID: `{{ $json.job_id }}`
+**Node 3 - Wait + Loop:**
+- Use n8n Wait node (5 seconds) + Get Status + IF node to poll until completed
 
-**Output:**
+**Output (when completed):**
 ```json
 {
   "status": "Completed",
