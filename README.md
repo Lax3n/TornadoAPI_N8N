@@ -2,6 +2,15 @@
 
 Download YouTube videos & Spotify podcasts directly in your n8n workflows.
 
+## What's New in v1.1.0
+
+- **🎬 Video Clipping**: Extract segments with `clip_start` and `clip_end` timestamps
+- **📺 Live Stream Recording**: Record live streams with `live_recording`, `live_from_start`, `max_duration`
+- **📊 Resolution Selection**: Limit quality with `max_resolution` (4K, 1080p, 720p, etc.)
+- **📈 Dashboard Resource**: New operations for stats, daily metrics, cluster activity, billing
+- **🔔 Enhanced Webhook Trigger**: New events (`batch_completed`, `progress`) and `job_id` filter
+- **⚡ Progress Webhooks**: Get real-time updates during download/mux/upload stages
+
 ## Installation
 
 ### Via npm (recommended)
@@ -47,6 +56,18 @@ Creates a download job. Returns immediately with a `job_id`.
 | Filename | string | ❌ | Custom filename |
 | Folder | string | ❌ | S3 folder prefix |
 | Webhook URL | string | ❌ | Notification URL |
+| Audio Only | boolean | ❌ | Extract audio only |
+| Download Subtitles | boolean | ❌ | Download subtitles |
+| Download Thumbnail | boolean | ❌ | Download thumbnail |
+| Quality Preset | select | ❌ | highest, high, medium, low, lowest |
+| Max Resolution | select | ❌ | best, 2160, 1440, 1080, 720, 480, 360 |
+| Clip Start | string | ❌ | Start timestamp (HH:MM:SS or seconds) |
+| Clip End | string | ❌ | End timestamp (HH:MM:SS or seconds) |
+| Live Recording | boolean | ❌ | Enable live stream mode |
+| Live From Start | boolean | ❌ | Record from stream beginning |
+| Max Duration | number | ❌ | Max recording duration (seconds) |
+| Wait for Video | boolean | ❌ | Wait for scheduled streams |
+| Enable Progress Webhook | boolean | ❌ | Receive progress updates |
 
 **Output (YouTube):**
 ```json
@@ -84,6 +105,94 @@ Check the current status of a job.
   "s3_url": "https://your-bucket.s3.amazonaws.com/videos/video.mp4?X-Amz-Algorithm=...",
   "step": "Finished",
   "error": null
+}
+```
+
+---
+
+### Dashboard Operations (NEW in v1.1.0)
+
+Monitor your Tornado API usage directly from n8n.
+
+#### Dashboard → Get Stats
+Get aggregated statistics for your API key.
+
+**Output:**
+```json
+{
+  "total_jobs": 1523,
+  "pending_jobs": 5,
+  "processing_jobs": 12,
+  "completed_jobs": 1450,
+  "failed_jobs": 56,
+  "storage_used_gb": 50.0,
+  "avg_processing_time_seconds": 45.2
+}
+```
+
+#### Dashboard → Get Daily Stats
+Get job statistics for the last 7 days.
+
+**Output:**
+```json
+{
+  "daily_stats": [
+    { "date": "2024-01-08", "completed": 45, "failed": 2 },
+    { "date": "2024-01-09", "completed": 62, "failed": 5 }
+  ]
+}
+```
+
+#### Dashboard → Get Cluster Stats
+Get real-time cluster activity.
+
+**Output:**
+```json
+{
+  "total_downloading": 45,
+  "total_muxing": 12,
+  "total_uploading": 8
+}
+```
+
+#### Dashboard → Get Billing
+Get Stripe billing information.
+
+**Output:**
+```json
+{
+  "billing_enabled": true,
+  "total_usage_gb": 45.67,
+  "period_start_formatted": "Jan 01, 2024",
+  "period_end_formatted": "Feb 01, 2024"
+}
+```
+
+---
+
+## 🔔 Webhook Trigger (NEW events in v1.1.0)
+
+Listen for Tornado events in real-time.
+
+| Event | Description |
+|-------|-------------|
+| Job Completed | When a job finishes successfully |
+| Job Failed | When a job fails |
+| Batch Completed | When all episodes in a batch are done |
+| Progress Update | Real-time progress (downloading, muxing, uploading) |
+| Any Event | Trigger on all events |
+
+**Filter Options:**
+- Filter by Job ID
+- Filter by Batch ID
+
+**Example Progress Webhook Payload:**
+```json
+{
+  "type": "progress",
+  "job_id": "550e8400-...",
+  "stage": "muxing",
+  "progress_percent": 33
 }
 ```
 

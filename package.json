@@ -1,7 +1,7 @@
 {
   "name": "n8n-nodes-tornado-api",
-  "version": "1.0.2",
-  "description": "n8n node for Tornado API - Download YouTube videos & Spotify podcasts",
+  "version": "1.1.0",
+  "description": "n8n node for Tornado API - Download TBs of YouTube videos & Spotify podcasts with advanced features",
   "keywords": [
     "n8n-community-node-package",
     "n8n",
@@ -12,7 +12,10 @@
     "spotify",
     "podcast",
     "mp4",
-    "mp3"
+    "mp3",
+    "dashboard",
+    "live-stream",
+    "clipping"
   ],
   "license": "MIT",
   "homepage": "https://tornado.velys.software",
@@ -42,7 +45,8 @@
       "dist/credentials/TornadoApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/TornadoApi/TornadoApi.node.js"
+      "dist/nodes/TornadoApi/TornadoApi.node.js",
+      "dist/nodes/TornadoApi/TornadoApiTrigger.node.js"
     ]
   },
   "devDependencies": {
