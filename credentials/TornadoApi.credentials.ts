@@ -9,7 +9,7 @@ export class TornadoApi implements ICredentialType {
 	name = 'tornadoApi';
 	displayName = 'Tornado API';
 	icon = 'file:tornado.svg';
-	documentationUrl = 'https://docs.tornado.velys.software/authentication';
+	documentationUrl = 'https://docs.tornadoapi.io/authentication';
 	properties: INodeProperties[] = [
 		{
 			displayName: 'API Key',
@@ -24,7 +24,7 @@ export class TornadoApi implements ICredentialType {
 			displayName: 'Base URL',
 			name: 'baseUrl',
 			type: 'string',
-			default: 'https://tornado.velys.software',
+			default: 'https://api.tornadoapi.io',
 			description: 'The base URL of the Tornado API',
 		},
 	];

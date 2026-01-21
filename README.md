@@ -34,7 +34,7 @@ docker run -it --rm -p 5678:5678 \
 1. Go to **Credentials** → **New**
 2. Search for **Tornado API**
 3. Enter your API Key (starts with `sk_`)
-4. Base URL: `https://tornado.velys.software` (default)
+4. Base URL: `https://api.tornadoapi.io` (default)
 
 ---
 
@@ -564,7 +564,7 @@ To get your node listed in the official n8n integrations:
 
 ## 🔗 Links
 
-- [Tornado API](https://tornado.velys.software)
-- [API Documentation](https://docs.tornado.velys.software)
-- [Get API Key](https://tornado.velys.software/dashboard)
+- [Tornado API](https://api.tornadoapi.io)
+- [API Documentation](https://docs.tornadoapi.io)
+- [Get API Key](https://api.tornadoapi.io/dashboard)
 - [Support](mailto:support@velys.software)
