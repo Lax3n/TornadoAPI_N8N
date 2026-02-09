@@ -27,6 +27,13 @@ export class TornadoApi implements ICredentialType {
 			default: 'https://api.tornadoapi.io',
 			description: 'The base URL of the Tornado API',
 		},
+		{
+			displayName: 'Dashboard Base URL',
+			name: 'dashboardBaseUrl',
+			type: 'string',
+			default: '',
+			description: 'The base URL of the Tornado Dashboard backend (optional, required for Dashboard operations)',
+		},
 	];
 
 	authenticate: IAuthenticateGeneric = {

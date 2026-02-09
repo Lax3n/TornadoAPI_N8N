@@ -3,6 +3,7 @@ import {
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
+	NodeOperationError,
 } from 'n8n-workflow';
 
 export class TornadoApi implements INodeType {
@@ -668,11 +669,23 @@ export class TornadoApi implements INodeType {
 						description: 'Get the status of a batch',
 						action: 'Get batch status',
 					},
+					{
+						name: 'Rename Jobs',
+						value: 'renameJobs',
+						description: 'Rename files of jobs in a batch',
+						action: 'Rename batch jobs',
+					},
+					{
+						name: 'Start',
+						value: 'start',
+						description: 'Start processing a batch',
+						action: 'Start a batch',
+					},
 				],
 				default: 'getStatus',
 			},
 
-			// Batch Get Status Fields
+			// Batch ID Fields
 			{
 				displayName: 'Batch ID',
 				name: 'batchId',
@@ -681,11 +694,50 @@ export class TornadoApi implements INodeType {
 				displayOptions: {
 					show: {
 						resource: ['batch'],
-						operation: ['getStatus'],
+						operation: ['getStatus', 'renameJobs', 'start'],
 					},
 				},
 				default: '',
 				description: 'The UUID of the batch',
+			},
+
+			// Batch Rename Jobs Fields
+			{
+				displayName: 'Renames',
+				name: 'renames',
+				type: 'fixedCollection',
+				typeOptions: { multipleValues: true },
+				required: true,
+				displayOptions: {
+					show: {
+						resource: ['batch'],
+						operation: ['renameJobs'],
+					},
+				},
+				default: {},
+				options: [
+					{
+						name: 'renameItems',
+						displayName: 'Renames',
+						values: [
+							{
+								displayName: 'Job ID',
+								name: 'job_id',
+								type: 'string',
+								default: '',
+								description: 'The UUID of the job to rename',
+							},
+							{
+								displayName: 'Filename',
+								name: 'filename',
+								type: 'string',
+								default: '',
+								description: 'New filename for the job',
+							},
+						],
+					},
+				],
+				description: 'List of job ID and filename pairs to rename',
 			},
 
 			// ==================== DASHBOARD OPERATIONS ====================
@@ -793,39 +845,199 @@ export class TornadoApi implements INodeType {
 				name: 'operation',
 				type: 'options',
 				noDataExpression: true,
-				displayOptions: {
-					show: {
-						resource: ['storage'],
-					},
-				},
+				displayOptions: { show: { resource: ['storage'] } },
 				options: [
-					{
-						name: 'Configure Bucket',
-						value: 'configureBucket',
-						description: 'Configure your own S3/R2 bucket for file uploads',
-						action: 'Configure S3 bucket',
-					},
-					{
-						name: 'Reset to Default',
-						value: 'resetBucket',
-						description: 'Reset to use Tornado default storage',
-						action: 'Reset to default storage',
-					},
+					{ name: 'Configure S3', value: 'configureS3', description: 'Configure an S3-compatible storage provider', action: 'Configure S3 storage' },
+					{ name: 'Delete S3', value: 'deleteS3', description: 'Remove S3 storage configuration', action: 'Delete S3 configuration' },
+					{ name: 'Configure Azure Blob', value: 'configureBlob', description: 'Configure Azure Blob Storage', action: 'Configure Azure Blob storage' },
+					{ name: 'Delete Azure Blob', value: 'deleteBlob', description: 'Remove Azure Blob storage configuration', action: 'Delete Azure Blob configuration' },
+					{ name: 'Configure GCS', value: 'configureGcs', description: 'Configure Google Cloud Storage', action: 'Configure GCS storage' },
+					{ name: 'Delete GCS', value: 'deleteGcs', description: 'Remove Google Cloud Storage configuration', action: 'Delete GCS configuration' },
+					{ name: 'Configure OSS', value: 'configureOss', description: 'Configure Alibaba Cloud OSS', action: 'Configure OSS storage' },
+					{ name: 'Delete OSS', value: 'deleteOss', description: 'Remove Alibaba Cloud OSS configuration', action: 'Delete OSS configuration' },
+					{ name: 'Configure Bucket (Legacy)', value: 'configureBucket', description: '[Deprecated] Configure S3 bucket using legacy endpoint', action: 'Configure bucket (legacy)' },
+					{ name: 'Reset Bucket (Legacy)', value: 'resetBucket', description: '[Deprecated] Reset to default storage using legacy endpoint', action: 'Reset bucket (legacy)' },
 				],
-				default: 'configureBucket',
+				default: 'configureS3',
 			},
 
-			// Storage Provider
+			// S3 Fields
+			{
+				displayName: 'Bucket Name',
+				name: 's3Bucket',
+				type: 'string',
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureS3'] } },
+				default: '',
+				description: 'The name of your S3 bucket',
+			},
+			{
+				displayName: 'Region',
+				name: 's3Region',
+				type: 'string',
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureS3'] } },
+				default: 'us-east-1',
+				description: 'AWS region (use auto for Cloudflare R2)',
+			},
+			{
+				displayName: 'Access Key ID',
+				name: 's3AccessKey',
+				type: 'string',
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureS3'] } },
+				default: '',
+				description: 'Your S3 Access Key ID',
+			},
+			{
+				displayName: 'Secret Access Key',
+				name: 's3SecretKey',
+				type: 'string',
+				typeOptions: { password: true },
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureS3'] } },
+				default: '',
+				description: 'Your S3 Secret Access Key',
+			},
+			{
+				displayName: 'S3 Options',
+				name: 's3Options',
+				type: 'collection',
+				placeholder: 'Add Option',
+				default: {},
+				displayOptions: { show: { resource: ['storage'], operation: ['configureS3'] } },
+				options: [
+					{ displayName: 'Endpoint URL', name: 'endpoint', type: 'string', default: '', description: 'Custom S3 endpoint URL (for R2, MinIO, etc.)' },
+					{ displayName: 'Folder Prefix', name: 'folder_prefix', type: 'string', default: '', description: 'Folder prefix for uploaded files' },
+					{ displayName: 'Base Folder', name: 'base_folder', type: 'string', default: '', description: 'Base folder path in the bucket' },
+				],
+			},
+
+			// Azure Blob Fields
+			{
+				displayName: 'Account Name',
+				name: 'blobAccountName',
+				type: 'string',
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureBlob'] } },
+				default: '',
+				description: 'Azure Storage account name',
+			},
+			{
+				displayName: 'Container',
+				name: 'blobContainer',
+				type: 'string',
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureBlob'] } },
+				default: '',
+				description: 'Azure Blob container name',
+			},
+			{
+				displayName: 'Blob Options',
+				name: 'blobOptions',
+				type: 'collection',
+				placeholder: 'Add Option',
+				default: {},
+				displayOptions: { show: { resource: ['storage'], operation: ['configureBlob'] } },
+				options: [
+					{ displayName: 'Account Key', name: 'account_key', type: 'string', typeOptions: { password: true }, default: '', description: 'Azure Storage account key' },
+					{ displayName: 'SAS Token', name: 'sas_token', type: 'string', typeOptions: { password: true }, default: '', description: 'Azure SAS token (alternative to account key)' },
+					{ displayName: 'Folder Prefix', name: 'folder_prefix', type: 'string', default: '', description: 'Folder prefix for uploaded files' },
+					{ displayName: 'Base Folder', name: 'base_folder', type: 'string', default: '', description: 'Base folder path in the container' },
+				],
+			},
+
+			// GCS Fields
+			{
+				displayName: 'Project ID',
+				name: 'gcsProjectId',
+				type: 'string',
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureGcs'] } },
+				default: '',
+				description: 'Google Cloud project ID',
+			},
+			{
+				displayName: 'Bucket Name',
+				name: 'gcsBucket',
+				type: 'string',
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureGcs'] } },
+				default: '',
+				description: 'GCS bucket name',
+			},
+			{
+				displayName: 'Service Account JSON',
+				name: 'gcsServiceAccountJson',
+				type: 'string',
+				typeOptions: { password: true },
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureGcs'] } },
+				default: '',
+				description: 'GCS service account JSON key (stringified)',
+			},
+			{
+				displayName: 'GCS Options',
+				name: 'gcsOptions',
+				type: 'collection',
+				placeholder: 'Add Option',
+				default: {},
+				displayOptions: { show: { resource: ['storage'], operation: ['configureGcs'] } },
+				options: [
+					{ displayName: 'Folder Prefix', name: 'folder_prefix', type: 'string', default: '', description: 'Folder prefix for uploaded files' },
+					{ displayName: 'Base Folder', name: 'base_folder', type: 'string', default: '', description: 'Base folder path in the bucket' },
+				],
+			},
+
+			// OSS Fields
+			{
+				displayName: 'Bucket Name',
+				name: 'ossBucket',
+				type: 'string',
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureOss'] } },
+				default: '',
+				description: 'Alibaba Cloud OSS bucket name',
+			},
+			{
+				displayName: 'Access Key ID',
+				name: 'ossAccessKeyId',
+				type: 'string',
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureOss'] } },
+				default: '',
+				description: 'Alibaba Cloud Access Key ID',
+			},
+			{
+				displayName: 'Access Key Secret',
+				name: 'ossAccessKeySecret',
+				type: 'string',
+				typeOptions: { password: true },
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureOss'] } },
+				default: '',
+				description: 'Alibaba Cloud Access Key Secret',
+			},
+			{
+				displayName: 'OSS Options',
+				name: 'ossOptions',
+				type: 'collection',
+				placeholder: 'Add Option',
+				default: {},
+				displayOptions: { show: { resource: ['storage'], operation: ['configureOss'] } },
+				options: [
+					{ displayName: 'Endpoint URL', name: 'endpoint', type: 'string', default: '', description: 'Custom OSS endpoint URL' },
+					{ displayName: 'Folder Prefix', name: 'folder_prefix', type: 'string', default: '', description: 'Folder prefix for uploaded files' },
+					{ displayName: 'Base Folder', name: 'base_folder', type: 'string', default: '', description: 'Base folder path in the bucket' },
+				],
+			},
+
+			// Legacy Storage Fields
 			{
 				displayName: 'Provider',
 				name: 'provider',
 				type: 'options',
-				displayOptions: {
-					show: {
-						resource: ['storage'],
-						operation: ['configureBucket'],
-					},
-				},
+				displayOptions: { show: { resource: ['storage'], operation: ['configureBucket'] } },
 				options: [
 					{ name: 'Amazon S3', value: 'aws' },
 					{ name: 'Cloudflare R2', value: 'r2' },
@@ -833,91 +1045,53 @@ export class TornadoApi implements INodeType {
 					{ name: 'Other S3-Compatible', value: 'other' },
 				],
 				default: 'aws',
-				description: 'Your storage provider',
+				description: '[Deprecated] Your storage provider',
 			},
-
-			// S3 Endpoint
 			{
 				displayName: 'Endpoint URL',
 				name: 'endpoint',
 				type: 'string',
 				required: true,
-				displayOptions: {
-					show: {
-						resource: ['storage'],
-						operation: ['configureBucket'],
-					},
-				},
+				displayOptions: { show: { resource: ['storage'], operation: ['configureBucket'] } },
 				default: '',
-				placeholder: 'https://s3.us-east-1.amazonaws.com',
-				description: 'S3 endpoint URL. For AWS use https://s3.REGION.amazonaws.com, for R2 use https://ACCOUNT_ID.r2.cloudflarestorage.com',
+				description: '[Deprecated] S3 endpoint URL',
 			},
-
-			// Bucket Name
 			{
 				displayName: 'Bucket Name',
 				name: 'bucket',
 				type: 'string',
 				required: true,
-				displayOptions: {
-					show: {
-						resource: ['storage'],
-						operation: ['configureBucket'],
-					},
-				},
+				displayOptions: { show: { resource: ['storage'], operation: ['configureBucket'] } },
 				default: '',
-				placeholder: 'my-videos-bucket',
-				description: 'The name of your S3 bucket',
+				description: '[Deprecated] The name of your S3 bucket',
 			},
-
-			// Region
 			{
 				displayName: 'Region',
 				name: 'region',
 				type: 'string',
 				required: true,
-				displayOptions: {
-					show: {
-						resource: ['storage'],
-						operation: ['configureBucket'],
-					},
-				},
+				displayOptions: { show: { resource: ['storage'], operation: ['configureBucket'] } },
 				default: 'us-east-1',
-				placeholder: 'us-east-1',
-				description: 'AWS region (use "auto" for Cloudflare R2)',
+				description: '[Deprecated] AWS region',
 			},
-
-			// Access Key
 			{
 				displayName: 'Access Key ID',
 				name: 'accessKey',
 				type: 'string',
 				required: true,
-				displayOptions: {
-					show: {
-						resource: ['storage'],
-						operation: ['configureBucket'],
-					},
-				},
+				displayOptions: { show: { resource: ['storage'], operation: ['configureBucket'] } },
 				default: '',
-				description: 'Your S3 Access Key ID',
+				description: '[Deprecated] Your S3 Access Key ID',
 			},
-
-			// Secret Key
 			{
 				displayName: 'Secret Access Key',
 				name: 'secretKey',
 				type: 'string',
 				typeOptions: { password: true },
 				required: true,
-				displayOptions: {
-					show: {
-						resource: ['storage'],
-						operation: ['configureBucket'],
-					},
-				},
+				displayOptions: { show: { resource: ['storage'], operation: ['configureBucket'] } },
 				default: '',
-				description: 'Your S3 Secret Access Key',
+				description: '[Deprecated] Your S3 Secret Access Key',
 			},
 
 			// ==================== ACCOUNT OPERATIONS ====================
@@ -1186,14 +1360,94 @@ export class TornadoApi implements INodeType {
 							},
 						});
 					}
+
+					if (operation === 'renameJobs') {
+						const batchId = this.getNodeParameter('batchId', i) as string;
+						const renames = this.getNodeParameter('renames', i) as {
+							renameItems?: Array<{ job_id: string; filename: string }>;
+						};
+
+						responseData = await this.helpers.httpRequest({
+							method: 'PATCH',
+							url: `${baseUrl}/batch/${batchId}/jobs`,
+							body: { renames: renames.renameItems || [] },
+							json: true,
+							headers: {
+								'x-api-key': credentials.apiKey as string,
+								'Content-Type': 'application/json',
+							},
+						});
+					}
+
+					if (operation === 'start') {
+						const batchId = this.getNodeParameter('batchId', i) as string;
+
+						responseData = await this.helpers.httpRequest({
+							method: 'POST',
+							url: `${baseUrl}/batch/${batchId}/start`,
+							json: true,
+							headers: {
+								'x-api-key': credentials.apiKey as string,
+							},
+						});
+					}
 				}
 
 				// ==================== DASHBOARD ====================
 				if (resource === 'dashboard') {
+					const dashboardBaseUrl = (credentials.dashboardBaseUrl as string || '').replace(/\/$/, '');
+					if (!dashboardBaseUrl) {
+						throw new NodeOperationError(this.getNode(), 'Dashboard Base URL is not configured. Please set the Dashboard Base URL in your Tornado API credentials to use Dashboard operations.');
+					}
+
 					if (operation === 'getStats') {
 						responseData = await this.helpers.httpRequest({
 							method: 'GET',
-							url: `${baseUrl}/dashboard/stats`,
+							url: `${dashboardBaseUrl}/dashboard/stats`,
+							json: true,
+							headers: {
+								'x-api-key': credentials.apiKey as string,
+							},
+						});
+					}
+
+					if (operation === 'getBatches') {
+						responseData = await this.helpers.httpRequest({
+							method: 'GET',
+							url: `${dashboardBaseUrl}/dashboard/batches`,
+							json: true,
+							headers: {
+								'x-api-key': credentials.apiKey as string,
+							},
+						});
+					}
+
+					if (operation === 'getDaily') {
+						responseData = await this.helpers.httpRequest({
+							method: 'GET',
+							url: `${dashboardBaseUrl}/dashboard/daily`,
+							json: true,
+							headers: {
+								'x-api-key': credentials.apiKey as string,
+							},
+						});
+					}
+
+					if (operation === 'getCluster') {
+						responseData = await this.helpers.httpRequest({
+							method: 'GET',
+							url: `${dashboardBaseUrl}/dashboard/cluster`,
+							json: true,
+							headers: {
+								'x-api-key': credentials.apiKey as string,
+							},
+						});
+					}
+
+					if (operation === 'getBilling') {
+						responseData = await this.helpers.httpRequest({
+							method: 'GET',
+							url: `${dashboardBaseUrl}/dashboard/billing`,
 							json: true,
 							headers: {
 								'x-api-key': credentials.apiKey as string,
@@ -1215,52 +1469,8 @@ export class TornadoApi implements INodeType {
 
 						responseData = await this.helpers.httpRequest({
 							method: 'GET',
-							url: `${baseUrl}/dashboard/jobs`,
+							url: `${dashboardBaseUrl}/dashboard/jobs`,
 							qs,
-							json: true,
-							headers: {
-								'x-api-key': credentials.apiKey as string,
-							},
-						});
-					}
-
-					if (operation === 'getBatches') {
-						responseData = await this.helpers.httpRequest({
-							method: 'GET',
-							url: `${baseUrl}/dashboard/batches`,
-							json: true,
-							headers: {
-								'x-api-key': credentials.apiKey as string,
-							},
-						});
-					}
-
-					if (operation === 'getDaily') {
-						responseData = await this.helpers.httpRequest({
-							method: 'GET',
-							url: `${baseUrl}/dashboard/daily`,
-							json: true,
-							headers: {
-								'x-api-key': credentials.apiKey as string,
-							},
-						});
-					}
-
-					if (operation === 'getCluster') {
-						responseData = await this.helpers.httpRequest({
-							method: 'GET',
-							url: `${baseUrl}/dashboard/cluster`,
-							json: true,
-							headers: {
-								'x-api-key': credentials.apiKey as string,
-							},
-						});
-					}
-
-					if (operation === 'getBilling') {
-						responseData = await this.helpers.httpRequest({
-							method: 'GET',
-							url: `${baseUrl}/dashboard/billing`,
 							json: true,
 							headers: {
 								'x-api-key': credentials.apiKey as string,
@@ -1271,40 +1481,81 @@ export class TornadoApi implements INodeType {
 
 				// ==================== STORAGE ====================
 				if (resource === 'storage') {
+					if (operation === 'configureS3') {
+						const bucket = this.getNodeParameter('s3Bucket', i) as string;
+						const region = this.getNodeParameter('s3Region', i) as string;
+						const access_key = this.getNodeParameter('s3AccessKey', i) as string;
+						const secret_key = this.getNodeParameter('s3SecretKey', i) as string;
+						const opts = this.getNodeParameter('s3Options', i) as { endpoint?: string; folder_prefix?: string; base_folder?: string };
+						const body: Record<string, unknown> = { bucket, region, access_key, secret_key };
+						if (opts.endpoint) body.endpoint = opts.endpoint;
+						if (opts.folder_prefix) body.folder_prefix = opts.folder_prefix;
+						if (opts.base_folder) body.base_folder = opts.base_folder;
+						responseData = await this.helpers.httpRequest({ method: 'POST', url: `${baseUrl}/user/s3`, body, json: true, headers: { 'x-api-key': credentials.apiKey as string, 'Content-Type': 'application/json' } });
+					}
+
+					if (operation === 'deleteS3') {
+						responseData = await this.helpers.httpRequest({ method: 'DELETE', url: `${baseUrl}/user/s3`, json: true, headers: { 'x-api-key': credentials.apiKey as string } });
+					}
+
+					if (operation === 'configureBlob') {
+						const account_name = this.getNodeParameter('blobAccountName', i) as string;
+						const container = this.getNodeParameter('blobContainer', i) as string;
+						const opts = this.getNodeParameter('blobOptions', i) as { account_key?: string; sas_token?: string; folder_prefix?: string; base_folder?: string };
+						const body: Record<string, unknown> = { account_name, container };
+						if (opts.account_key) body.account_key = opts.account_key;
+						if (opts.sas_token) body.sas_token = opts.sas_token;
+						if (opts.folder_prefix) body.folder_prefix = opts.folder_prefix;
+						if (opts.base_folder) body.base_folder = opts.base_folder;
+						responseData = await this.helpers.httpRequest({ method: 'POST', url: `${baseUrl}/user/blob`, body, json: true, headers: { 'x-api-key': credentials.apiKey as string, 'Content-Type': 'application/json' } });
+					}
+
+					if (operation === 'deleteBlob') {
+						responseData = await this.helpers.httpRequest({ method: 'DELETE', url: `${baseUrl}/user/blob`, json: true, headers: { 'x-api-key': credentials.apiKey as string } });
+					}
+
+					if (operation === 'configureGcs') {
+						const project_id = this.getNodeParameter('gcsProjectId', i) as string;
+						const bucket = this.getNodeParameter('gcsBucket', i) as string;
+						const service_account_json = this.getNodeParameter('gcsServiceAccountJson', i) as string;
+						const opts = this.getNodeParameter('gcsOptions', i) as { folder_prefix?: string; base_folder?: string };
+						const body: Record<string, unknown> = { project_id, bucket, service_account_json };
+						if (opts.folder_prefix) body.folder_prefix = opts.folder_prefix;
+						if (opts.base_folder) body.base_folder = opts.base_folder;
+						responseData = await this.helpers.httpRequest({ method: 'POST', url: `${baseUrl}/user/gcs`, body, json: true, headers: { 'x-api-key': credentials.apiKey as string, 'Content-Type': 'application/json' } });
+					}
+
+					if (operation === 'deleteGcs') {
+						responseData = await this.helpers.httpRequest({ method: 'DELETE', url: `${baseUrl}/user/gcs`, json: true, headers: { 'x-api-key': credentials.apiKey as string } });
+					}
+
+					if (operation === 'configureOss') {
+						const bucket = this.getNodeParameter('ossBucket', i) as string;
+						const access_key_id = this.getNodeParameter('ossAccessKeyId', i) as string;
+						const access_key_secret = this.getNodeParameter('ossAccessKeySecret', i) as string;
+						const opts = this.getNodeParameter('ossOptions', i) as { endpoint?: string; folder_prefix?: string; base_folder?: string };
+						const body: Record<string, unknown> = { bucket, access_key_id, access_key_secret };
+						if (opts.endpoint) body.endpoint = opts.endpoint;
+						if (opts.folder_prefix) body.folder_prefix = opts.folder_prefix;
+						if (opts.base_folder) body.base_folder = opts.base_folder;
+						responseData = await this.helpers.httpRequest({ method: 'POST', url: `${baseUrl}/user/oss`, body, json: true, headers: { 'x-api-key': credentials.apiKey as string, 'Content-Type': 'application/json' } });
+					}
+
+					if (operation === 'deleteOss') {
+						responseData = await this.helpers.httpRequest({ method: 'DELETE', url: `${baseUrl}/user/oss`, json: true, headers: { 'x-api-key': credentials.apiKey as string } });
+					}
+
 					if (operation === 'configureBucket') {
 						const endpoint = this.getNodeParameter('endpoint', i) as string;
 						const bucket = this.getNodeParameter('bucket', i) as string;
 						const region = this.getNodeParameter('region', i) as string;
 						const accessKey = this.getNodeParameter('accessKey', i) as string;
 						const secretKey = this.getNodeParameter('secretKey', i) as string;
-
-						responseData = await this.helpers.httpRequest({
-							method: 'POST',
-							url: `${baseUrl}/user/bucket`,
-							body: {
-								endpoint,
-								bucket,
-								region,
-								access_key: accessKey,
-								secret_key: secretKey,
-							},
-							json: true,
-							headers: {
-								'x-api-key': credentials.apiKey as string,
-								'Content-Type': 'application/json',
-							},
-						});
+						responseData = await this.helpers.httpRequest({ method: 'POST', url: `${baseUrl}/user/bucket`, body: { endpoint, bucket, region, access_key: accessKey, secret_key: secretKey }, json: true, headers: { 'x-api-key': credentials.apiKey as string, 'Content-Type': 'application/json' } });
 					}
 
 					if (operation === 'resetBucket') {
-						responseData = await this.helpers.httpRequest({
-							method: 'DELETE',
-							url: `${baseUrl}/user/bucket`,
-							json: true,
-							headers: {
-								'x-api-key': credentials.apiKey as string,
-							},
-						});
+						responseData = await this.helpers.httpRequest({ method: 'DELETE', url: `${baseUrl}/user/bucket`, json: true, headers: { 'x-api-key': credentials.apiKey as string } });
 					}
 				}
 
