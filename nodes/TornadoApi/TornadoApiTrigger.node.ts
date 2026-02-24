@@ -35,6 +35,16 @@ export class TornadoApiTrigger implements INodeType {
 				type: 'options',
 				options: [
 					{
+						name: 'Any Event',
+						value: 'all',
+						description: 'Triggers on any webhook event',
+					},
+					{
+						name: 'Batch Completed',
+						value: 'batch_completed',
+						description: 'Triggers when all episodes in a batch are done',
+					},
+					{
 						name: 'Job Completed',
 						value: 'completed',
 						description: 'Triggers when a job finishes successfully',
@@ -45,19 +55,9 @@ export class TornadoApiTrigger implements INodeType {
 						description: 'Triggers when a job fails',
 					},
 					{
-						name: 'Batch Completed',
-						value: 'batch_completed',
-						description: 'Triggers when all episodes in a batch are done',
-					},
-					{
 						name: 'Progress Update',
 						value: 'progress',
 						description: 'Triggers on progress updates (downloading, muxing, uploading stages)',
-					},
-					{
-						name: 'Any Event',
-						value: 'all',
-						description: 'Triggers on any webhook event',
 					},
 				],
 				default: 'completed',
@@ -87,6 +87,7 @@ export class TornadoApiTrigger implements INodeType {
 				],
 			},
 		],
+		usableAsTool: true,
 	};
 
 	webhookMethods = {

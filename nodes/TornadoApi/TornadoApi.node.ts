@@ -3,6 +3,8 @@ import {
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
+	JsonObject,
+	NodeApiError,
 	NodeOperationError,
 } from 'n8n-workflow';
 
@@ -35,8 +37,8 @@ export class TornadoApi implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
-						name: 'Job',
-						value: 'job',
+						name: 'Account',
+						value: 'account',
 					},
 					{
 						name: 'Batch',
@@ -47,12 +49,16 @@ export class TornadoApi implements INodeType {
 						value: 'dashboard',
 					},
 					{
-						name: 'Storage',
-						value: 'storage',
+						name: 'Job',
+						value: 'job',
 					},
 					{
-						name: 'Account',
-						value: 'account',
+						name: 'Notification',
+						value: 'notification',
+					},
+					{
+						name: 'Storage',
+						value: 'storage',
 					},
 				],
 				default: 'job',
@@ -71,6 +77,12 @@ export class TornadoApi implements INodeType {
 				},
 				options: [
 					{
+						name: 'Cancel',
+						value: 'cancel',
+						description: 'Cancel a pending job',
+						action: 'Cancel a job',
+					},
+					{
 						name: 'Create',
 						value: 'create',
 						description: 'Create a new download job',
@@ -81,6 +93,18 @@ export class TornadoApi implements INodeType {
 						value: 'createBulk',
 						description: 'Create multiple download jobs at once',
 						action: 'Create bulk jobs',
+					},
+					{
+						name: 'Delete File',
+						value: 'deleteFile',
+						description: 'Delete a job file from storage',
+						action: 'Delete a job file',
+					},
+					{
+						name: 'Get Metadata',
+						value: 'getMetadata',
+						description: 'Get video metadata without downloading',
+						action: 'Get video metadata',
 					},
 					{
 						name: 'Get Status',
@@ -95,28 +119,10 @@ export class TornadoApi implements INodeType {
 						action: 'List jobs',
 					},
 					{
-						name: 'Cancel',
-						value: 'cancel',
-						description: 'Cancel a pending job',
-						action: 'Cancel a job',
-					},
-					{
 						name: 'Retry',
 						value: 'retry',
 						description: 'Retry a failed job',
 						action: 'Retry a job',
-					},
-					{
-						name: 'Delete File',
-						value: 'deleteFile',
-						description: 'Delete a job file from storage',
-						action: 'Delete a job file',
-					},
-					{
-						name: 'Get Metadata',
-						value: 'getMetadata',
-						description: 'Get video metadata without downloading',
-						action: 'Get video metadata',
 					},
 				],
 				default: 'create',
@@ -152,57 +158,177 @@ export class TornadoApi implements INodeType {
 				},
 				options: [
 					{
-						displayName: 'Format',
-						name: 'format',
+						displayName: 'Audio Bitrate',
+						name: 'audio_bitrate',
 						type: 'options',
 						options: [
-							{ name: 'MP4', value: 'mp4' },
-							{ name: 'MKV', value: 'mkv' },
-							{ name: 'WebM', value: 'webm' },
-							{ name: 'MOV', value: 'mov' },
+							{ name: '128 Kbps', value: '128k' },
+							{ name: '192 Kbps', value: '192k' },
+							{ name: '256 Kbps', value: '256k' },
+							{ name: '320 Kbps', value: '320k' },
+							{ name: '64 Kbps', value: '64k' },
 						],
-						default: 'mp4',
-						description: 'Output container format',
-					},
-					{
-						displayName: 'Video Codec',
-						name: 'video_codec',
-						type: 'options',
-						options: [
-							{ name: 'Copy (No Re-encode)', value: 'copy' },
-							{ name: 'H.264', value: 'h264' },
-							{ name: 'H.265 (HEVC)', value: 'h265' },
-							{ name: 'VP9', value: 'vp9' },
-						],
-						default: 'copy',
-						description: 'Video codec to use',
+						default: '192k',
+						description: 'Audio bitrate when transcoding',
 					},
 					{
 						displayName: 'Audio Codec',
 						name: 'audio_codec',
 						type: 'options',
 						options: [
-							{ name: 'Copy (No Re-encode)', value: 'copy' },
 							{ name: 'AAC', value: 'aac' },
-							{ name: 'Opus', value: 'opus' },
+							{ name: 'Copy (No Re-Encode)', value: 'copy' },
 							{ name: 'MP3', value: 'mp3' },
+							{ name: 'Opus', value: 'opus' },
 						],
 						default: 'copy',
 						description: 'Audio codec to use',
 					},
 					{
-						displayName: 'Audio Bitrate',
-						name: 'audio_bitrate',
+						displayName: 'Audio Only',
+						name: 'audio_only',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to extract audio track only (outputs mp3/aac)',
+					},
+					{
+						displayName: 'Clip End',
+						name: 'clip_end',
+						type: 'string',
+						default: '',
+						placeholder: '00:05:00 or 300',
+						description: 'End timestamp for video clipping (HH:MM:SS or seconds)',
+					},
+					{
+						displayName: 'Clip Start',
+						name: 'clip_start',
+						type: 'string',
+						default: '',
+						placeholder: '00:01:30 or 90',
+						description: 'Start timestamp for video clipping (HH:MM:SS or seconds)',
+					},
+					{
+						displayName: 'Custom Filename',
+						name: 'filename',
+						type: 'string',
+						default: '',
+						description: 'Custom filename (without extension)',
+					},
+					{
+						displayName: 'Download Subtitles',
+						name: 'download_subtitles',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to download subtitles if available',
+					},
+					{
+						displayName: 'Download Thumbnail',
+						name: 'download_thumbnail',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to download video thumbnail',
+					},
+					{
+						displayName: 'Enable Progress Webhook',
+						name: 'enable_progress_webhook',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to receive progress webhooks during processing (downloading, muxing, uploading stages)',
+					},
+					{
+						displayName: 'Folder',
+						name: 'folder',
+						type: 'string',
+						default: '',
+						description: 'S3 folder prefix for organizing files',
+					},
+					{
+						displayName: 'Format',
+						name: 'format',
 						type: 'options',
 						options: [
-							{ name: '64 kbps', value: '64k' },
-							{ name: '128 kbps', value: '128k' },
-							{ name: '192 kbps', value: '192k' },
-							{ name: '256 kbps', value: '256k' },
-							{ name: '320 kbps', value: '320k' },
+							{ name: 'MKV', value: 'mkv' },
+							{ name: 'MOV', value: 'mov' },
+							{ name: 'MP4', value: 'mp4' },
+							{ name: 'WebM', value: 'webm' },
 						],
-						default: '192k',
-						description: 'Audio bitrate when transcoding',
+						default: 'mp4',
+						description: 'Output container format',
+					},
+					{
+						displayName: 'Live From Start',
+						name: 'live_from_start',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to record from the beginning of the live stream (VOD mode)',
+					},
+					{
+						displayName: 'Live Recording',
+						name: 'live_recording',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to enable live stream recording mode',
+					},
+					{
+						displayName: 'Max Duration (Seconds)',
+						name: 'max_duration',
+						type: 'number',
+						typeOptions: {
+							minValue: 1,
+						},
+						default: 0,
+						description: 'Maximum recording duration in seconds (recommended for live streams)',
+					},
+					{
+						displayName: 'Max Resolution',
+						name: 'max_resolution',
+						type: 'options',
+						options: [
+							{ name: '2K (1440p)', value: '1440' },
+							{ name: '4K (2160p)', value: '2160' },
+							{ name: 'Best Available', value: 'best' },
+							{ name: 'Full HD (1080p)', value: '1080' },
+							{ name: 'HD (720p)', value: '720' },
+							{ name: 'Low (360p)', value: '360' },
+							{ name: 'SD (480p)', value: '480' },
+						],
+						default: 'best',
+						description: 'Maximum video resolution to download',
+					},
+					{
+						displayName: 'Paused',
+						name: 'paused',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to create Spotify show batch in paused mode (allows renaming before starting)',
+					},
+					{
+						displayName: 'Quality Preset',
+						name: 'quality_preset',
+						type: 'options',
+						options: [
+							{ name: 'Default', value: '' },
+							{ name: 'High', value: 'high' },
+							{ name: 'Highest', value: 'highest' },
+							{ name: 'Low', value: 'low' },
+							{ name: 'Lowest', value: 'lowest' },
+							{ name: 'Medium', value: 'medium' },
+						],
+						default: '',
+						description: 'Quality preset (overrides video_quality)',
+					},
+					{
+						displayName: 'Video Codec',
+						name: 'video_codec',
+						type: 'options',
+						options: [
+							{ name: 'Copy (No Re-Encode)', value: 'copy' },
+							{ name: 'H.264', value: 'h264' },
+							{ name: 'H.265 (HEVC)', value: 'h265' },
+							{ name: 'VP9', value: 'vp9' },
+						],
+						default: 'copy',
+						description: 'Video codec to use',
 					},
 					{
 						displayName: 'Video Quality (CRF)',
@@ -216,18 +342,11 @@ export class TornadoApi implements INodeType {
 						description: 'Video quality CRF (0-51, lower = better). Only used when video codec is not "copy".',
 					},
 					{
-						displayName: 'Custom Filename',
-						name: 'filename',
-						type: 'string',
-						default: '',
-						description: 'Custom filename (without extension)',
-					},
-					{
-						displayName: 'Folder',
-						name: 'folder',
-						type: 'string',
-						default: '',
-						description: 'S3 folder prefix for organizing files',
+						displayName: 'Wait for Live',
+						name: 'wait_for_live',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to wait for scheduled/upcoming streams to start',
 					},
 					{
 						displayName: 'Webhook URL',
@@ -235,112 +354,6 @@ export class TornadoApi implements INodeType {
 						type: 'string',
 						default: '',
 						description: 'URL to receive completion notification',
-					},
-					{
-						displayName: 'Audio Only',
-						name: 'audio_only',
-						type: 'boolean',
-						default: false,
-						description: 'Extract audio track only (outputs mp3/aac)',
-					},
-					{
-						displayName: 'Download Subtitles',
-						name: 'download_subtitles',
-						type: 'boolean',
-						default: false,
-						description: 'Download subtitles if available',
-					},
-					{
-						displayName: 'Download Thumbnail',
-						name: 'download_thumbnail',
-						type: 'boolean',
-						default: false,
-						description: 'Download video thumbnail',
-					},
-					{
-						displayName: 'Quality Preset',
-						name: 'quality_preset',
-						type: 'options',
-						options: [
-							{ name: 'Default', value: '' },
-							{ name: 'Highest', value: 'highest' },
-							{ name: 'High', value: 'high' },
-							{ name: 'Medium', value: 'medium' },
-							{ name: 'Low', value: 'low' },
-							{ name: 'Lowest', value: 'lowest' },
-						],
-						default: '',
-						description: 'Quality preset (overrides video_quality)',
-					},
-					{
-						displayName: 'Max Resolution',
-						name: 'max_resolution',
-						type: 'options',
-						options: [
-							{ name: 'Best Available', value: 'best' },
-							{ name: '4K (2160p)', value: '2160' },
-							{ name: '2K (1440p)', value: '1440' },
-							{ name: 'Full HD (1080p)', value: '1080' },
-							{ name: 'HD (720p)', value: '720' },
-							{ name: 'SD (480p)', value: '480' },
-							{ name: 'Low (360p)', value: '360' },
-						],
-						default: 'best',
-						description: 'Maximum video resolution to download',
-					},
-					{
-						displayName: 'Clip Start',
-						name: 'clip_start',
-						type: 'string',
-						default: '',
-						placeholder: '00:01:30 or 90',
-						description: 'Start timestamp for video clipping (HH:MM:SS or seconds)',
-					},
-					{
-						displayName: 'Clip End',
-						name: 'clip_end',
-						type: 'string',
-						default: '',
-						placeholder: '00:05:00 or 300',
-						description: 'End timestamp for video clipping (HH:MM:SS or seconds)',
-					},
-					{
-						displayName: 'Live Recording',
-						name: 'live_recording',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to enable live stream recording mode',
-					},
-					{
-						displayName: 'Live From Start',
-						name: 'live_from_start',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to record from the beginning of the live stream (VOD mode)',
-					},
-					{
-						displayName: 'Max Duration (Seconds)',
-						name: 'max_duration',
-						type: 'number',
-						typeOptions: {
-							minValue: 1,
-						},
-						default: 0,
-						description: 'Maximum recording duration in seconds (recommended for live streams)',
-					},
-					{
-						displayName: 'Wait for Video',
-						name: 'wait_for_video',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to wait for scheduled/upcoming streams to start',
-					},
-					{
-						displayName: 'Enable Progress Webhook',
-						name: 'enable_progress_webhook',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to receive progress webhooks during processing (downloading, muxing, uploading stages)',
 					},
 				],
 			},
@@ -380,8 +393,8 @@ export class TornadoApi implements INodeType {
 						name: 'limit',
 						type: 'number',
 						typeOptions: { minValue: 1, maxValue: 100 },
-						default: 20,
-						description: 'Number of jobs to return (max 100)',
+						default: 50,
+						description: 'Max number of results to return',
 					},
 					{
 						displayName: 'Offset',
@@ -397,10 +410,11 @@ export class TornadoApi implements INodeType {
 						type: 'options',
 						options: [
 							{ name: 'All', value: '' },
-							{ name: 'Pending', value: 'pending' },
-							{ name: 'Processing', value: 'processing' },
 							{ name: 'Completed', value: 'completed' },
 							{ name: 'Failed', value: 'failed' },
+							{ name: 'Pending', value: 'pending' },
+							{ name: 'Processing', value: 'processing' },
+							{ name: 'Warning', value: 'warning' },
 						],
 						default: '',
 						description: 'Filter by job status',
@@ -479,6 +493,70 @@ export class TornadoApi implements INodeType {
 				},
 				options: [
 					{
+						displayName: 'Audio Bitrate',
+						name: 'audio_bitrate',
+						type: 'options',
+						options: [
+							{ name: '128 Kbps', value: '128k' },
+							{ name: '192 Kbps', value: '192k' },
+							{ name: '256 Kbps', value: '256k' },
+							{ name: '320 Kbps', value: '320k' },
+							{ name: '64 Kbps', value: '64k' },
+						],
+						default: '192k',
+						description: 'Audio bitrate for all jobs',
+					},
+					{
+						displayName: 'Audio Codec',
+						name: 'audio_codec',
+						type: 'options',
+						options: [
+							{ name: 'AAC', value: 'aac' },
+							{ name: 'Copy (No Re-Encode)', value: 'copy' },
+							{ name: 'MP3', value: 'mp3' },
+							{ name: 'Opus', value: 'opus' },
+						],
+						default: 'copy',
+						description: 'Audio codec for all jobs',
+					},
+					{
+						displayName: 'Audio Only',
+						name: 'audio_only',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to extract audio only for all jobs',
+					},
+					{
+						displayName: 'Clip End',
+						name: 'clip_end',
+						type: 'string',
+						default: '',
+						placeholder: '00:05:00 or 300',
+						description: 'End timestamp for video clipping (all jobs)',
+					},
+					{
+						displayName: 'Clip Start',
+						name: 'clip_start',
+						type: 'string',
+						default: '',
+						placeholder: '00:01:30 or 90',
+						description: 'Start timestamp for video clipping (all jobs)',
+					},
+					{
+						displayName: 'Download Subtitles',
+						name: 'download_subtitles',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to download subtitles for all jobs',
+					},
+					{
+						displayName: 'Download Thumbnail',
+						name: 'download_thumbnail',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to download thumbnails for all jobs',
+					},
+					{
 						displayName: 'Folder',
 						name: 'folder',
 						type: 'string',
@@ -490,53 +568,81 @@ export class TornadoApi implements INodeType {
 						name: 'format',
 						type: 'options',
 						options: [
-							{ name: 'MP4', value: 'mp4' },
 							{ name: 'MKV', value: 'mkv' },
-							{ name: 'WebM', value: 'webm' },
 							{ name: 'MOV', value: 'mov' },
+							{ name: 'MP4', value: 'mp4' },
+							{ name: 'WebM', value: 'webm' },
 						],
 						default: 'mp4',
 						description: 'Output format for all jobs',
+					},
+					{
+						displayName: 'Live From Start',
+						name: 'live_from_start',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to record from the beginning of live streams',
+					},
+					{
+						displayName: 'Live Recording',
+						name: 'live_recording',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to enable live stream recording mode for all jobs',
+					},
+					{
+						displayName: 'Max Duration (Seconds)',
+						name: 'max_duration',
+						type: 'number',
+						typeOptions: {
+							minValue: 1,
+						},
+						default: 0,
+						description: 'Maximum recording duration in seconds for all jobs',
+					},
+					{
+						displayName: 'Max Resolution',
+						name: 'max_resolution',
+						type: 'options',
+						options: [
+							{ name: '2K (1440p)', value: '1440' },
+							{ name: '4K (2160p)', value: '2160' },
+							{ name: 'Best Available', value: 'best' },
+							{ name: 'Full HD (1080p)', value: '1080' },
+							{ name: 'HD (720p)', value: '720' },
+							{ name: 'Low (360p)', value: '360' },
+							{ name: 'SD (480p)', value: '480' },
+						],
+						default: 'best',
+						description: 'Maximum video resolution for all jobs',
+					},
+					{
+						displayName: 'Quality Preset',
+						name: 'quality_preset',
+						type: 'options',
+						options: [
+							{ name: 'Default', value: '' },
+							{ name: 'High', value: 'high' },
+							{ name: 'Highest', value: 'highest' },
+							{ name: 'Low', value: 'low' },
+							{ name: 'Lowest', value: 'lowest' },
+							{ name: 'Medium', value: 'medium' },
+						],
+						default: '',
+						description: 'Quality preset for all jobs',
 					},
 					{
 						displayName: 'Video Codec',
 						name: 'video_codec',
 						type: 'options',
 						options: [
-							{ name: 'Copy (No Re-encode)', value: 'copy' },
+							{ name: 'Copy (No Re-Encode)', value: 'copy' },
 							{ name: 'H.264', value: 'h264' },
 							{ name: 'H.265 (HEVC)', value: 'h265' },
 							{ name: 'VP9', value: 'vp9' },
 						],
 						default: 'copy',
 						description: 'Video codec for all jobs',
-					},
-					{
-						displayName: 'Audio Codec',
-						name: 'audio_codec',
-						type: 'options',
-						options: [
-							{ name: 'Copy (No Re-encode)', value: 'copy' },
-							{ name: 'AAC', value: 'aac' },
-							{ name: 'Opus', value: 'opus' },
-							{ name: 'MP3', value: 'mp3' },
-						],
-						default: 'copy',
-						description: 'Audio codec for all jobs',
-					},
-					{
-						displayName: 'Audio Bitrate',
-						name: 'audio_bitrate',
-						type: 'options',
-						options: [
-							{ name: '64 kbps', value: '64k' },
-							{ name: '128 kbps', value: '128k' },
-							{ name: '192 kbps', value: '192k' },
-							{ name: '256 kbps', value: '256k' },
-							{ name: '320 kbps', value: '320k' },
-						],
-						default: '192k',
-						description: 'Audio bitrate for all jobs',
 					},
 					{
 						displayName: 'Video Quality (CRF)',
@@ -550,100 +656,8 @@ export class TornadoApi implements INodeType {
 						description: 'Video quality CRF for all jobs (0-51, lower = better)',
 					},
 					{
-						displayName: 'Audio Only',
-						name: 'audio_only',
-						type: 'boolean',
-						default: false,
-						description: 'Extract audio only for all jobs',
-					},
-					{
-						displayName: 'Download Subtitles',
-						name: 'download_subtitles',
-						type: 'boolean',
-						default: false,
-						description: 'Download subtitles for all jobs',
-					},
-					{
-						displayName: 'Download Thumbnail',
-						name: 'download_thumbnail',
-						type: 'boolean',
-						default: false,
-						description: 'Download thumbnails for all jobs',
-					},
-					{
-						displayName: 'Quality Preset',
-						name: 'quality_preset',
-						type: 'options',
-						options: [
-							{ name: 'Default', value: '' },
-							{ name: 'Highest', value: 'highest' },
-							{ name: 'High', value: 'high' },
-							{ name: 'Medium', value: 'medium' },
-							{ name: 'Low', value: 'low' },
-							{ name: 'Lowest', value: 'lowest' },
-						],
-						default: '',
-						description: 'Quality preset for all jobs',
-					},
-					{
-						displayName: 'Max Resolution',
-						name: 'max_resolution',
-						type: 'options',
-						options: [
-							{ name: 'Best Available', value: 'best' },
-							{ name: '4K (2160p)', value: '2160' },
-							{ name: '2K (1440p)', value: '1440' },
-							{ name: 'Full HD (1080p)', value: '1080' },
-							{ name: 'HD (720p)', value: '720' },
-							{ name: 'SD (480p)', value: '480' },
-							{ name: 'Low (360p)', value: '360' },
-						],
-						default: 'best',
-						description: 'Maximum video resolution for all jobs',
-					},
-					{
-						displayName: 'Clip Start',
-						name: 'clip_start',
-						type: 'string',
-						default: '',
-						placeholder: '00:01:30 or 90',
-						description: 'Start timestamp for video clipping (all jobs)',
-					},
-					{
-						displayName: 'Clip End',
-						name: 'clip_end',
-						type: 'string',
-						default: '',
-						placeholder: '00:05:00 or 300',
-						description: 'End timestamp for video clipping (all jobs)',
-					},
-					{
-						displayName: 'Live Recording',
-						name: 'live_recording',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to enable live stream recording mode for all jobs',
-					},
-					{
-						displayName: 'Live From Start',
-						name: 'live_from_start',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to record from the beginning of live streams',
-					},
-					{
-						displayName: 'Max Duration (Seconds)',
-						name: 'max_duration',
-						type: 'number',
-						typeOptions: {
-							minValue: 1,
-						},
-						default: 0,
-						description: 'Maximum recording duration in seconds for all jobs',
-					},
-					{
-						displayName: 'Wait for Video',
-						name: 'wait_for_video',
+						displayName: 'Wait for Live',
+						name: 'wait_for_live',
 						type: 'boolean',
 						default: false,
 						description: 'Whether to wait for scheduled streams to start',
@@ -753,28 +767,16 @@ export class TornadoApi implements INodeType {
 				},
 				options: [
 					{
-						name: 'Get Stats',
-						value: 'getStats',
-						description: 'Get aggregated statistics for your API key',
-						action: 'Get dashboard stats',
-					},
-					{
-						name: 'Get Jobs',
-						value: 'getJobs',
-						description: 'Get paginated list of jobs for the dashboard',
-						action: 'Get dashboard jobs',
-					},
-					{
 						name: 'Get Batches',
 						value: 'getBatches',
 						description: 'Get list of batch operations',
 						action: 'Get dashboard batches',
 					},
 					{
-						name: 'Get Daily Stats',
-						value: 'getDaily',
-						description: 'Get daily job statistics for the last 7 days',
-						action: 'Get daily stats',
+						name: 'Get Billing',
+						value: 'getBilling',
+						description: 'Get current billing period usage from Stripe',
+						action: 'Get billing info',
 					},
 					{
 						name: 'Get Cluster Stats',
@@ -783,10 +785,22 @@ export class TornadoApi implements INodeType {
 						action: 'Get cluster stats',
 					},
 					{
-						name: 'Get Billing',
-						value: 'getBilling',
-						description: 'Get current billing period usage from Stripe',
-						action: 'Get billing info',
+						name: 'Get Daily Stats',
+						value: 'getDaily',
+						description: 'Get daily job statistics for the last 7 days',
+						action: 'Get daily stats',
+					},
+					{
+						name: 'Get Jobs',
+						value: 'getJobs',
+						description: 'Get paginated list of jobs for the dashboard',
+						action: 'Get dashboard jobs',
+					},
+					{
+						name: 'Get Stats',
+						value: 'getStats',
+						description: 'Get aggregated statistics for your API key',
+						action: 'Get dashboard stats',
 					},
 				],
 				default: 'getStats',
@@ -812,7 +826,7 @@ export class TornadoApi implements INodeType {
 						type: 'number',
 						typeOptions: { minValue: 1, maxValue: 100 },
 						default: 50,
-						description: 'Number of jobs to return (max 100)',
+						description: 'Max number of results to return',
 					},
 					{
 						displayName: 'Offset',
@@ -828,10 +842,11 @@ export class TornadoApi implements INodeType {
 						type: 'options',
 						options: [
 							{ name: 'All', value: '' },
-							{ name: 'Pending', value: 'pending' },
-							{ name: 'Processing', value: 'processing' },
 							{ name: 'Completed', value: 'completed' },
 							{ name: 'Failed', value: 'failed' },
+							{ name: 'Pending', value: 'pending' },
+							{ name: 'Processing', value: 'processing' },
+							{ name: 'Warning', value: 'warning' },
 						],
 						default: '',
 						description: 'Filter by job status',
@@ -847,21 +862,30 @@ export class TornadoApi implements INodeType {
 				noDataExpression: true,
 				displayOptions: { show: { resource: ['storage'] } },
 				options: [
-					{ name: 'Configure S3', value: 'configureS3', description: 'Configure an S3-compatible storage provider', action: 'Configure S3 storage' },
-					{ name: 'Delete S3', value: 'deleteS3', description: 'Remove S3 storage configuration', action: 'Delete S3 configuration' },
-					{ name: 'Configure Azure Blob', value: 'configureBlob', description: 'Configure Azure Blob Storage', action: 'Configure Azure Blob storage' },
-					{ name: 'Delete Azure Blob', value: 'deleteBlob', description: 'Remove Azure Blob storage configuration', action: 'Delete Azure Blob configuration' },
+					{ name: 'Configure Azure Blob', value: 'configureBlob', description: 'Configure Azure Blob Storage', action: 'Configure azure blob storage' },
+					{ name: 'Configure Bucket (Legacy)', value: 'configureBucket', description: '[Deprecated] Configure S3 bucket using legacy endpoint', action: 'Configure bucket legacy' },
 					{ name: 'Configure GCS', value: 'configureGcs', description: 'Configure Google Cloud Storage', action: 'Configure GCS storage' },
-					{ name: 'Delete GCS', value: 'deleteGcs', description: 'Remove Google Cloud Storage configuration', action: 'Delete GCS configuration' },
 					{ name: 'Configure OSS', value: 'configureOss', description: 'Configure Alibaba Cloud OSS', action: 'Configure OSS storage' },
+					{ name: 'Configure S3', value: 'configureS3', description: 'Configure an S3-compatible storage provider', action: 'Configure S3 storage' },
+					{ name: 'Delete Azure Blob', value: 'deleteBlob', description: 'Remove Azure Blob storage configuration', action: 'Delete azure blob configuration' },
+					{ name: 'Delete GCS', value: 'deleteGcs', description: 'Remove Google Cloud Storage configuration', action: 'Delete GCS configuration' },
 					{ name: 'Delete OSS', value: 'deleteOss', description: 'Remove Alibaba Cloud OSS configuration', action: 'Delete OSS configuration' },
-					{ name: 'Configure Bucket (Legacy)', value: 'configureBucket', description: '[Deprecated] Configure S3 bucket using legacy endpoint', action: 'Configure bucket (legacy)' },
-					{ name: 'Reset Bucket (Legacy)', value: 'resetBucket', description: '[Deprecated] Reset to default storage using legacy endpoint', action: 'Reset bucket (legacy)' },
+					{ name: 'Delete S3', value: 'deleteS3', description: 'Remove S3 storage configuration', action: 'Delete S3 configuration' },
+					{ name: 'Reset Bucket (Legacy)', value: 'resetBucket', description: '[Deprecated] Reset to default storage using legacy endpoint', action: 'Reset bucket legacy' },
 				],
 				default: 'configureS3',
 			},
 
 			// S3 Fields
+			{
+				displayName: 'Endpoint URL',
+				name: 's3Endpoint',
+				type: 'string',
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureS3'] } },
+				default: '',
+				description: 'S3 endpoint URL (e.g., https://s3.amazonaws.com for AWS, or custom for R2, MinIO, etc.)',
+			},
 			{
 				displayName: 'Bucket Name',
 				name: 's3Bucket',
@@ -907,9 +931,8 @@ export class TornadoApi implements INodeType {
 				default: {},
 				displayOptions: { show: { resource: ['storage'], operation: ['configureS3'] } },
 				options: [
-					{ displayName: 'Endpoint URL', name: 'endpoint', type: 'string', default: '', description: 'Custom S3 endpoint URL (for R2, MinIO, etc.)' },
 					{ displayName: 'Folder Prefix', name: 'folder_prefix', type: 'string', default: '', description: 'Folder prefix for uploaded files' },
-					{ displayName: 'Base Folder', name: 'base_folder', type: 'string', default: '', description: 'Base folder path in the bucket' },
+					{ displayName: 'Folder Name', name: 'folder_name', type: 'string', default: '', description: 'Base folder name in the bucket (default: videos)' },
 				],
 			},
 
@@ -943,7 +966,7 @@ export class TornadoApi implements INodeType {
 					{ displayName: 'Account Key', name: 'account_key', type: 'string', typeOptions: { password: true }, default: '', description: 'Azure Storage account key' },
 					{ displayName: 'SAS Token', name: 'sas_token', type: 'string', typeOptions: { password: true }, default: '', description: 'Azure SAS token (alternative to account key)' },
 					{ displayName: 'Folder Prefix', name: 'folder_prefix', type: 'string', default: '', description: 'Folder prefix for uploaded files' },
-					{ displayName: 'Base Folder', name: 'base_folder', type: 'string', default: '', description: 'Base folder path in the container' },
+					{ displayName: 'Folder Name', name: 'folder_name', type: 'string', default: '', description: 'Base folder name in the container (default: videos)' },
 				],
 			},
 
@@ -985,11 +1008,20 @@ export class TornadoApi implements INodeType {
 				displayOptions: { show: { resource: ['storage'], operation: ['configureGcs'] } },
 				options: [
 					{ displayName: 'Folder Prefix', name: 'folder_prefix', type: 'string', default: '', description: 'Folder prefix for uploaded files' },
-					{ displayName: 'Base Folder', name: 'base_folder', type: 'string', default: '', description: 'Base folder path in the bucket' },
+					{ displayName: 'Folder Name', name: 'folder_name', type: 'string', default: '', description: 'Base folder name in the bucket (default: videos)' },
 				],
 			},
 
 			// OSS Fields
+			{
+				displayName: 'Endpoint URL',
+				name: 'ossEndpoint',
+				type: 'string',
+				required: true,
+				displayOptions: { show: { resource: ['storage'], operation: ['configureOss'] } },
+				default: '',
+				description: 'Alibaba Cloud OSS endpoint URL',
+			},
 			{
 				displayName: 'Bucket Name',
 				name: 'ossBucket',
@@ -1026,9 +1058,8 @@ export class TornadoApi implements INodeType {
 				default: {},
 				displayOptions: { show: { resource: ['storage'], operation: ['configureOss'] } },
 				options: [
-					{ displayName: 'Endpoint URL', name: 'endpoint', type: 'string', default: '', description: 'Custom OSS endpoint URL' },
 					{ displayName: 'Folder Prefix', name: 'folder_prefix', type: 'string', default: '', description: 'Folder prefix for uploaded files' },
-					{ displayName: 'Base Folder', name: 'base_folder', type: 'string', default: '', description: 'Base folder path in the bucket' },
+					{ displayName: 'Folder Name', name: 'folder_name', type: 'string', default: '', description: 'Base folder name in the bucket (default: videos)' },
 				],
 			},
 
@@ -1094,6 +1125,45 @@ export class TornadoApi implements INodeType {
 				description: '[Deprecated] Your S3 Secret Access Key',
 			},
 
+			// ==================== NOTIFICATION OPERATIONS ====================
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { resource: ['notification'] } },
+				options: [
+					{ name: 'Configure Slack', value: 'configureSlack', description: 'Configure Slack webhook notifications', action: 'Configure slack notifications' },
+					{ name: 'Delete Slack', value: 'deleteSlack', description: 'Remove Slack webhook configuration', action: 'Delete slack configuration' },
+				],
+				default: 'configureSlack',
+			},
+
+			// Slack Fields
+			{
+				displayName: 'Webhook URL',
+				name: 'slackWebhookUrl',
+				type: 'string',
+				required: true,
+				displayOptions: { show: { resource: ['notification'], operation: ['configureSlack'] } },
+				default: '',
+				placeholder: 'https://hooks.slack.com/services/...',
+				description: 'Slack incoming webhook URL',
+			},
+			{
+				displayName: 'Notify Level',
+				name: 'slackNotifyLevel',
+				type: 'options',
+				displayOptions: { show: { resource: ['notification'], operation: ['configureSlack'] } },
+				options: [
+					{ name: 'All', value: 'all' },
+					{ name: 'Errors Only', value: 'errors_only' },
+					{ name: 'Warnings Only', value: 'warnings_only' },
+				],
+				default: 'all',
+				description: 'Which events trigger Slack notifications',
+			},
+
 			// ==================== ACCOUNT OPERATIONS ====================
 			{
 				displayName: 'Operation',
@@ -1116,6 +1186,7 @@ export class TornadoApi implements INodeType {
 				default: 'getUsage',
 			},
 		],
+		usableAsTool: true,
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
@@ -1155,7 +1226,8 @@ export class TornadoApi implements INodeType {
 							live_recording?: boolean;
 							live_from_start?: boolean;
 							max_duration?: number;
-							wait_for_video?: boolean;
+							wait_for_live?: boolean;
+							paused?: boolean;
 							enable_progress_webhook?: boolean;
 						};
 
@@ -1180,7 +1252,8 @@ export class TornadoApi implements INodeType {
 						if (additionalOptions.live_recording) body.live_recording = additionalOptions.live_recording;
 						if (additionalOptions.live_from_start) body.live_from_start = additionalOptions.live_from_start;
 						if (additionalOptions.max_duration && additionalOptions.max_duration > 0) body.max_duration = additionalOptions.max_duration;
-						if (additionalOptions.wait_for_video) body.wait_for_video = additionalOptions.wait_for_video;
+						if (additionalOptions.wait_for_live) body.wait_for_live = additionalOptions.wait_for_live;
+						if (additionalOptions.paused) body.paused = additionalOptions.paused;
 						if (additionalOptions.enable_progress_webhook) body.enable_progress_webhook = additionalOptions.enable_progress_webhook;
 
 						responseData = await this.helpers.httpRequest({
@@ -1306,7 +1379,7 @@ export class TornadoApi implements INodeType {
 							live_recording?: boolean;
 							live_from_start?: boolean;
 							max_duration?: number;
-							wait_for_video?: boolean;
+							wait_for_live?: boolean;
 						};
 
 						const jobs = (bulkUrls.urlItems || []).map((item) => ({
@@ -1331,7 +1404,7 @@ export class TornadoApi implements INodeType {
 						if (bulkOptions.live_recording) body.live_recording = bulkOptions.live_recording;
 						if (bulkOptions.live_from_start) body.live_from_start = bulkOptions.live_from_start;
 						if (bulkOptions.max_duration && bulkOptions.max_duration > 0) body.max_duration = bulkOptions.max_duration;
-						if (bulkOptions.wait_for_video) body.wait_for_video = bulkOptions.wait_for_video;
+						if (bulkOptions.wait_for_live) body.wait_for_live = bulkOptions.wait_for_live;
 
 						responseData = await this.helpers.httpRequest({
 							method: 'POST',
@@ -1482,15 +1555,15 @@ export class TornadoApi implements INodeType {
 				// ==================== STORAGE ====================
 				if (resource === 'storage') {
 					if (operation === 'configureS3') {
+						const endpoint = this.getNodeParameter('s3Endpoint', i) as string;
 						const bucket = this.getNodeParameter('s3Bucket', i) as string;
 						const region = this.getNodeParameter('s3Region', i) as string;
 						const access_key = this.getNodeParameter('s3AccessKey', i) as string;
 						const secret_key = this.getNodeParameter('s3SecretKey', i) as string;
-						const opts = this.getNodeParameter('s3Options', i) as { endpoint?: string; folder_prefix?: string; base_folder?: string };
-						const body: Record<string, unknown> = { bucket, region, access_key, secret_key };
-						if (opts.endpoint) body.endpoint = opts.endpoint;
+						const opts = this.getNodeParameter('s3Options', i) as { folder_prefix?: string; folder_name?: string };
+						const body: Record<string, unknown> = { endpoint, bucket, region, access_key, secret_key };
 						if (opts.folder_prefix) body.folder_prefix = opts.folder_prefix;
-						if (opts.base_folder) body.base_folder = opts.base_folder;
+						if (opts.folder_name) body.folder_name = opts.folder_name;
 						responseData = await this.helpers.httpRequest({ method: 'POST', url: `${baseUrl}/user/s3`, body, json: true, headers: { 'x-api-key': credentials.apiKey as string, 'Content-Type': 'application/json' } });
 					}
 
@@ -1501,12 +1574,12 @@ export class TornadoApi implements INodeType {
 					if (operation === 'configureBlob') {
 						const account_name = this.getNodeParameter('blobAccountName', i) as string;
 						const container = this.getNodeParameter('blobContainer', i) as string;
-						const opts = this.getNodeParameter('blobOptions', i) as { account_key?: string; sas_token?: string; folder_prefix?: string; base_folder?: string };
+						const opts = this.getNodeParameter('blobOptions', i) as { account_key?: string; sas_token?: string; folder_prefix?: string; folder_name?: string };
 						const body: Record<string, unknown> = { account_name, container };
 						if (opts.account_key) body.account_key = opts.account_key;
 						if (opts.sas_token) body.sas_token = opts.sas_token;
 						if (opts.folder_prefix) body.folder_prefix = opts.folder_prefix;
-						if (opts.base_folder) body.base_folder = opts.base_folder;
+						if (opts.folder_name) body.folder_name = opts.folder_name;
 						responseData = await this.helpers.httpRequest({ method: 'POST', url: `${baseUrl}/user/blob`, body, json: true, headers: { 'x-api-key': credentials.apiKey as string, 'Content-Type': 'application/json' } });
 					}
 
@@ -1518,10 +1591,10 @@ export class TornadoApi implements INodeType {
 						const project_id = this.getNodeParameter('gcsProjectId', i) as string;
 						const bucket = this.getNodeParameter('gcsBucket', i) as string;
 						const service_account_json = this.getNodeParameter('gcsServiceAccountJson', i) as string;
-						const opts = this.getNodeParameter('gcsOptions', i) as { folder_prefix?: string; base_folder?: string };
+						const opts = this.getNodeParameter('gcsOptions', i) as { folder_prefix?: string; folder_name?: string };
 						const body: Record<string, unknown> = { project_id, bucket, service_account_json };
 						if (opts.folder_prefix) body.folder_prefix = opts.folder_prefix;
-						if (opts.base_folder) body.base_folder = opts.base_folder;
+						if (opts.folder_name) body.folder_name = opts.folder_name;
 						responseData = await this.helpers.httpRequest({ method: 'POST', url: `${baseUrl}/user/gcs`, body, json: true, headers: { 'x-api-key': credentials.apiKey as string, 'Content-Type': 'application/json' } });
 					}
 
@@ -1530,14 +1603,14 @@ export class TornadoApi implements INodeType {
 					}
 
 					if (operation === 'configureOss') {
+						const endpoint = this.getNodeParameter('ossEndpoint', i) as string;
 						const bucket = this.getNodeParameter('ossBucket', i) as string;
 						const access_key_id = this.getNodeParameter('ossAccessKeyId', i) as string;
 						const access_key_secret = this.getNodeParameter('ossAccessKeySecret', i) as string;
-						const opts = this.getNodeParameter('ossOptions', i) as { endpoint?: string; folder_prefix?: string; base_folder?: string };
-						const body: Record<string, unknown> = { bucket, access_key_id, access_key_secret };
-						if (opts.endpoint) body.endpoint = opts.endpoint;
+						const opts = this.getNodeParameter('ossOptions', i) as { folder_prefix?: string; folder_name?: string };
+						const body: Record<string, unknown> = { endpoint, bucket, access_key_id, access_key_secret };
 						if (opts.folder_prefix) body.folder_prefix = opts.folder_prefix;
-						if (opts.base_folder) body.base_folder = opts.base_folder;
+						if (opts.folder_name) body.folder_name = opts.folder_name;
 						responseData = await this.helpers.httpRequest({ method: 'POST', url: `${baseUrl}/user/oss`, body, json: true, headers: { 'x-api-key': credentials.apiKey as string, 'Content-Type': 'application/json' } });
 					}
 
@@ -1559,6 +1632,21 @@ export class TornadoApi implements INodeType {
 					}
 				}
 
+				// ==================== NOTIFICATION ====================
+				if (resource === 'notification') {
+					if (operation === 'configureSlack') {
+						const webhook_url = this.getNodeParameter('slackWebhookUrl', i) as string;
+						const notify_level = this.getNodeParameter('slackNotifyLevel', i) as string;
+						const body: Record<string, unknown> = { webhook_url };
+						if (notify_level) body.notify_level = notify_level;
+						responseData = await this.helpers.httpRequest({ method: 'POST', url: `${baseUrl}/user/slack`, body, json: true, headers: { 'x-api-key': credentials.apiKey as string, 'Content-Type': 'application/json' } });
+					}
+
+					if (operation === 'deleteSlack') {
+						responseData = await this.helpers.httpRequest({ method: 'DELETE', url: `${baseUrl}/user/slack`, json: true, headers: { 'x-api-key': credentials.apiKey as string } });
+					}
+				}
+
 				// ==================== ACCOUNT ====================
 				if (resource === 'account') {
 					if (operation === 'getUsage') {
@@ -1573,13 +1661,13 @@ export class TornadoApi implements INodeType {
 					}
 				}
 
-				returnData.push({ json: responseData });
+				returnData.push({ json: responseData, pairedItem: { item: i } });
 			} catch (error) {
 				if (this.continueOnFail()) {
-					returnData.push({ json: { error: (error as Error).message } });
+					returnData.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
 					continue;
 				}
-				throw error;
+				throw new NodeApiError(this.getNode(), { message: (error as Error).message } as unknown as JsonObject);
 			}
 		}
 

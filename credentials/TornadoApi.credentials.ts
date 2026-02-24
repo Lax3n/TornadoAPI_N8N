@@ -8,7 +8,7 @@ import {
 export class TornadoApi implements ICredentialType {
 	name = 'tornadoApi';
 	displayName = 'Tornado API';
-	icon = 'file:tornado.svg';
+	icon = 'file:tornado.svg' as const;
 	documentationUrl = 'https://docs.tornadoapi.io/authentication';
 	properties: INodeProperties[] = [
 		{
@@ -31,8 +31,8 @@ export class TornadoApi implements ICredentialType {
 			displayName: 'Dashboard Base URL',
 			name: 'dashboardBaseUrl',
 			type: 'string',
-			default: '',
-			description: 'The base URL of the Tornado Dashboard backend (optional, required for Dashboard operations)',
+			default: 'https://dash.tornadoapi.io',
+			description: 'The base URL of the Tornado Dashboard backend (required for Dashboard operations)',
 		},
 	];
 
